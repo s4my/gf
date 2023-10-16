@@ -603,6 +603,10 @@ typedef struct UICode {
 	struct { int line, offset; } selection[2];
 } UICode;
 
+typedef struct UILexState {
+	bool inMultilineComment = false;
+} UILexState;
+
 typedef struct UIGauge {
 	UIElement e;
 	double position;
@@ -834,6 +838,7 @@ struct {
 
 	UIFont *activeFont;
 
+	UILexState lexState;
 #ifdef UI_DEBUG
 	UIWindow *inspector;
 	UITable *inspectorTable;
@@ -2590,8 +2595,8 @@ int UIDrawStringHighlighted(UIPainter *painter, UIRectangle lineBounds, const ch
 	int x = lineBounds.l;
 	int y = (lineBounds.t + lineBounds.b - UIMeasureStringHeight()) / 2;
 	int ti = 0;
-	_UICodeTokenType tokenType = UI_CODE_TOKEN_TYPE_DEFAULT;
-	bool inComment = false, inIdentifier = false, inChar = false, startedString = false, startedPreprocessor = false;
+	_UICodeTokenType tokenType = ui.lexState.inMultilineComment ? UI_CODE_TOKEN_TYPE_COMMENT : UI_CODE_TOKEN_TYPE_DEFAULT;
+	bool inComment = ui.lexState.inMultilineComment, inIdentifier = false, inChar = false, startedString = false, startedPreprocessor = false;
 	uint32_t last = 0;
 	int j = 0;
 
@@ -2612,6 +2617,7 @@ int UIDrawStringHighlighted(UIPainter *painter, UIRectangle lineBounds, const ch
 				tokenType = startedPreprocessor ? UI_CODE_TOKEN_TYPE_PREPROCESSOR : UI_CODE_TOKEN_TYPE_DEFAULT;
 				inComment = false;
 			}
+			ui.lexState.inMultilineComment = ((last & 0xFF00) == ('*' << 8) && c == '/' && ui.lexState.inMultilineComment) ? false : inComment;
 		} else if (tokenType == UI_CODE_TOKEN_TYPE_NUMBER) {
 			if (!_UICharIsAlpha(c) && !_UICharIsDigit(c)) {
 				tokenType = UI_CODE_TOKEN_TYPE_DEFAULT;
@@ -2785,6 +2791,7 @@ int _UICodeMessage(UIElement *element, UIMessage message, int di, void *dp) {
 			lineBounds.t += lineHeight;
 		}
 
+		ui.lexState.inMultilineComment = false;
 		UIFontActivate(previousFont);
 	} else if (message == UI_MSG_SCROLLED) {
 		code->moveScrollToFocusNextLayout = false;
